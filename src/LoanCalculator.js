@@ -1,199 +1,213 @@
 import React, { useState, useEffect } from "react";
 
-// --- Shadcn UI Component Mocks (for demonstration) ---
-// In a real shadcn/ui setup, you'd import these from your library
-const Card = ({ className, children }) => (
-    <div
-        className={`border bg-card text-card-foreground shadow-sm rounded-lg ${className}`}
-    >
-        {children}
-    </div>
-);
-const CardHeader = ({ className, children }) => (
-    <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
-        {children}
-    </div>
-);
-const CardTitle = ({ className, children }) => (
-    <h3
-        className={`text-lg font-semibold leading-none tracking-tight ${className}`}
-    >
-        {children}
-    </h3>
-);
-const CardDescription = ({ className, children }) => (
-    <p className={`text-sm text-muted-foreground ${className}`}>{children}</p>
-);
-const CardContent = ({ className, children }) => (
-    <div className={`p-6 pt-0 ${className}`}>{children}</div>
-);
-const Label = ({ className, children, ...props }) => (
-    <label
-        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}
-        {...props}
-    >
-        {children}
-    </label>
-);
-const Input = ({ className, type, ...props }) => (
-    <input
-        type={type}
-        className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-        {...props}
-    />
-);
-// --- End Shadcn UI Component Mocks ---
-
-// --- Helper Function for Currency Formatting ---
-const formatCurrency = (value) => {
-    if (isNaN(value) || !isFinite(value)) {
-        return "$0.00";
-    }
-    return value.toLocaleString("en-AU", {
+// Helper function to format numbers as Australian currency
+const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-AU", {
         style: "currency",
         currency: "AUD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+        maximumFractionDigits: 0,
+        minimumFractionDigits: 0,
+    }).format(amount);
 };
 
-// --- Main Loan Calculator Component ---
-function LoanCalculator() {
-    // State variables for user inputs
-    const [loanAmount, setLoanAmount] = useState(300000); // Default example value
-    const [interestRate, setInterestRate] = useState(6.5); // Default example value (annual %)
-    const [loanTerm, setLoanTerm] = useState(30); // Default example value (years)
+const App = () => {
+    const [loanAmount, setLoanAmount] = useState(500000);
+    const [loanTerm, setLoanTerm] = useState(30);
+    const [interestRate, setInterestRate] = useState(5.5);
+    const [repaymentType, setRepaymentType] = useState("principalAndInterest");
+    const [repaymentFrequency, setRepaymentFrequency] = useState("monthly");
 
-    // State variables for calculated results
-    const [monthlyPayment, setMonthlyPayment] = useState(0); // Principal + Interest
-    const [monthlyInterestOnly, setMonthlyInterestOnly] = useState(0);
+    const [repaymentAmount, setRepaymentAmount] = useState(0);
+    const [totalInterest, setTotalInterest] = useState(0);
+    const [totalRepayments, setTotalRepayments] = useState(0);
 
-    // Effect hook to recalculate when inputs change
+    // Recalculate repayments whenever any input changes
     useEffect(() => {
-        // Get numeric values from state, provide defaults if NaN
-        const principal = Number(loanAmount) || 0;
-        const annualRate = Number(interestRate) || 0;
-        const years = Number(loanTerm) || 0;
+        let monthlyRate = parseFloat(interestRate) / 100 / 12;
+        let numberOfPayments = parseFloat(loanTerm) * 12;
+        let monthlyRepayment = 0;
 
-        // Basic validation
-        if (principal <= 0 || annualRate <= 0 || years <= 0) {
-            setMonthlyPayment(0);
-            setMonthlyInterestOnly(0);
-            return; // Exit if inputs are invalid or zero
+        // Adjust for repayment frequency
+        let paymentsPerYear = 12;
+        if (repaymentFrequency === "fortnightly") {
+            paymentsPerYear = 26;
+        } else if (repaymentFrequency === "weekly") {
+            paymentsPerYear = 52;
         }
 
-        // Calculate monthly interest rate
-        const monthlyRate = annualRate / 100 / 12;
+        const effectiveRate = parseFloat(interestRate) / 100 / paymentsPerYear;
+        const effectiveTerm = parseFloat(loanTerm) * paymentsPerYear;
+        let calculatedRepaymentAmount = 0;
+        let calculatedTotalRepayments = 0;
+        let calculatedTotalInterest = 0;
 
-        // Calculate number of payments (months)
-        const numberOfPayments = years * 12;
-
-        // --- Calculate Monthly Principal & Interest Payment ---
-        // Using the standard loan payment formula: M = P [ r(1 + r)^n ] / [ (1 + r)^n – 1]
-        const factor = Math.pow(1 + monthlyRate, numberOfPayments);
-        const calculatedMonthlyPayment =
-            (principal * (monthlyRate * factor)) / (factor - 1);
-        setMonthlyPayment(calculatedMonthlyPayment);
-
-        // --- Calculate Monthly Interest-Only Payment ---
-        // Formula: I = P * r
-        const calculatedInterestOnly = principal * monthlyRate;
-        setMonthlyInterestOnly(calculatedInterestOnly);
-    }, [loanAmount, interestRate, loanTerm]); // Dependency array: recalculate when these change
-
-    // --- Event Handlers for Input Changes ---
-    const handleInputChange = (setter) => (event) => {
-        // Allow only numbers and a single decimal point
-        const value = event.target.value;
-        // Basic validation to allow numeric input including decimals
-        if (/^\d*\.?\d*$/.test(value) || value === "") {
-            setter(value);
+        if (repaymentType === "principalAndInterest") {
+            // Principal & Interest formula
+            if (effectiveRate > 0) {
+                calculatedRepaymentAmount =
+                    (parseFloat(loanAmount) *
+                        effectiveRate *
+                        Math.pow(1 + effectiveRate, effectiveTerm)) /
+                    (Math.pow(1 + effectiveRate, effectiveTerm) - 1);
+            } else {
+                calculatedRepaymentAmount =
+                    parseFloat(loanAmount) / effectiveTerm;
+            }
+            calculatedTotalRepayments =
+                calculatedRepaymentAmount * effectiveTerm;
+            calculatedTotalInterest =
+                calculatedTotalRepayments - parseFloat(loanAmount);
+        } else {
+            // Interest Only formula (for the first termYears)
+            calculatedRepaymentAmount =
+                (parseFloat(loanAmount) * (parseFloat(interestRate) / 100)) /
+                paymentsPerYear;
+            calculatedTotalRepayments =
+                calculatedRepaymentAmount * effectiveTerm;
+            calculatedTotalInterest = calculatedTotalRepayments;
         }
-    };
+
+        setRepaymentAmount(calculatedRepaymentAmount);
+        setTotalRepayments(calculatedTotalRepayments);
+        setTotalInterest(calculatedTotalInterest);
+    }, [loanAmount, loanTerm, interestRate, repaymentType, repaymentFrequency]);
 
     return (
-        <div className="flex justify-center items-center min-h-screen bg-gray-100 p-4 font-sans">
-            <Card className="w-full max-w-md shadow-lg">
-                <CardHeader>
-                    <CardTitle className="text-xl text-center">
-                        Loan Calculator
-                    </CardTitle>
-                    <CardDescription className="text-center">
-                        Estimate your monthly payments
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form className="space-y-4">
-                        {/* Loan Amount Input */}
-                        <div className="space-y-2">
-                            <Label htmlFor="loanAmount">Loan Amount ($)</Label>
-                            <Input
-                                id="loanAmount"
-                                type="text" // Use text to allow better handling of numeric input
-                                inputMode="decimal" // Hint for mobile keyboards
-                                placeholder="e.g., 300000"
-                                value={loanAmount}
-                                onChange={handleInputChange(setLoanAmount)}
-                                className="appearance-none" // Tries to hide number spinners
-                            />
-                        </div>
+        <div className="bg-gray-50 min-h-screen p-4 sm:p-8 flex justify-center items-center font-sans text-gray-800">
+            <div className="bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-4xl grid lg:grid-cols-3">
+                {/* Left Section: Inputs */}
+                <div className="p-6 md:p-8 sm:col-span-3 md:col-span-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-indigo-700">
+                        Home Loan Repayment Calculator
+                    </h1>
+                    <p className="text-gray-600 mb-8">
+                        Estimate your home loan repayments by adjusting the
+                        amount, term, and interest rate.
+                    </p>
 
-                        {/* Interest Rate Input */}
-                        <div className="space-y-2">
-                            <Label htmlFor="interestRate">
-                                Annual Interest Rate (%)
-                            </Label>
-                            <Input
-                                id="interestRate"
-                                type="text"
-                                inputMode="decimal"
-                                placeholder="e.g., 6.5"
-                                value={interestRate}
-                                onChange={handleInputChange(setInterestRate)}
-                                className="appearance-none"
-                            />
+                    {/* Loan Details Section */}
+                    <div className="mb-8">
+                        <h2 className="text-xl font-semibold mb-4 text-indigo-600">
+                            Loan Details
+                        </h2>
+                        <div className="grid sm:grid-cols-2 gap-6">
+                            <label className="block">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Loan Amount ($)
+                                </span>
+                                <input
+                                    type="text"
+                                    value={loanAmount}
+                                    onChange={(e) =>
+                                        setLoanAmount(e.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Loan Term (years)
+                                </span>
+                                <input
+                                    type="number"
+                                    value={loanTerm}
+                                    onChange={(e) =>
+                                        setLoanTerm(e.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Interest Rate (%)
+                                </span>
+                                <input
+                                    type="number"
+                                    value={interestRate}
+                                    onChange={(e) =>
+                                        setInterestRate(e.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                    step="0.1"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Repayment Type
+                                </span>
+                                <select
+                                    value={repaymentType}
+                                    onChange={(e) =>
+                                        setRepaymentType(e.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                >
+                                    <option value="principalAndInterest">
+                                        Principal & Interest
+                                    </option>
+                                    <option value="interestOnly">
+                                        Interest Only
+                                    </option>
+                                </select>
+                            </label>
+                            <label className="block sm:col-span-2">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Repayment Frequency
+                                </span>
+                                <select
+                                    value={repaymentFrequency}
+                                    onChange={(e) =>
+                                        setRepaymentFrequency(e.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                >
+                                    <option value="monthly">Monthly</option>
+                                    <option value="fortnightly">
+                                        Fortnightly
+                                    </option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </label>
                         </div>
+                    </div>
+                </div>
 
-                        {/* Loan Term Input */}
-                        <div className="space-y-2">
-                            <Label htmlFor="loanTerm">Loan Term (Years)</Label>
-                            <Input
-                                id="loanTerm"
-                                type="text"
-                                inputMode="numeric" // Hint for mobile keyboards
-                                placeholder="e.g., 30"
-                                value={loanTerm}
-                                onChange={handleInputChange(setLoanTerm)}
-                                className="appearance-none"
-                            />
+                {/* Right Section: Output */}
+                <div className="bg-indigo-700 text-white p-6 md:p-8 flex flex-col justify-between sm:col-span-3 md:col-span-1">
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                            Estimated Repayment
+                        </h2>
+                        <p className="text-sm opacity-80 mb-6">
+                            {repaymentFrequency.charAt(0).toUpperCase() +
+                                repaymentFrequency.slice(1)}{" "}
+                            Repayment
+                        </p>
+                        <div className="text-5xl sm:text-6xl font-extrabold mb-4">
+                            {formatCurrency(repaymentAmount)}
                         </div>
-
-                        {/* Results Display */}
-                        <div className="pt-4 space-y-3">
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
-                                <span className="text-sm font-medium text-gray-600">
-                                    Monthly P&I Payment:
-                                </span>
-                                <span className="text-lg font-semibold text-gray-800">
-                                    {formatCurrency(monthlyPayment)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
-                                <span className="text-sm font-medium text-gray-600">
-                                    Monthly Interest-Only:
-                                </span>
-                                <span className="text-lg font-semibold text-gray-800">
-                                    {formatCurrency(monthlyInterestOnly)}
-                                </span>
-                            </div>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
+                    </div>
+                    <div className="mt-8">
+                        <h3 className="text-lg font-bold mb-2">Total Costs</h3>
+                        <ul className="text-sm opacity-90 space-y-2">
+                            <li>
+                                <span className="font-bold">
+                                    Total repayments:
+                                </span>{" "}
+                                {formatCurrency(totalRepayments)}
+                            </li>
+                            <li>
+                                <span className="font-bold">
+                                    Total interest:
+                                </span>{" "}
+                                {formatCurrency(totalInterest)}
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
     );
-}
+};
 
-// --- Main App Component ---
-// This wraps the calculator and is the default export
-export default LoanCalculator;
+export default App;
